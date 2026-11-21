@@ -73,6 +73,10 @@ class MqttBridge:
             ("sensor", "last_clean", {"name": "Last head cleaning",
                                       "state_topic": f"{self.topic_prefix}/last_clean",
                                       "device_class": "timestamp", "icon": "mdi:water-sync"}),
+            ("binary_sensor", "airprint", {"name": "AirPrint bridge",
+                                          "state_topic": f"{self.topic_prefix}/airprint",
+                                          "payload_on": "ON", "payload_off": "OFF",
+                                          "icon": "mdi:apple-airplay"}),
             ("button", "nozzle_check", {"name": "Nozzle check",
                                         "icon": "mdi:format-color-fill",
                                         "command_topic": f"{self.topic_prefix}/button/nozzle_check",
@@ -105,6 +109,9 @@ class MqttBridge:
             client.publish(f"{self.topic_prefix}/last_print", state["last_print"], retain=True)
         if state.get("last_clean"):
             client.publish(f"{self.topic_prefix}/last_clean", state["last_clean"], retain=True)
+        if state.get("airprint_enabled") is not None:
+            client.publish(f"{self.topic_prefix}/airprint",
+                           "ON" if state["airprint_enabled"] else "OFF", retain=True)
         self._publish_discovery(state)
 
     def stop(self):

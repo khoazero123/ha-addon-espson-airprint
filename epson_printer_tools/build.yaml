@@ -1,8 +1,8 @@
 build_from:
-  aarch64: docker.io/library/python:3.12-alpine3.20
-  amd64: docker.io/library/python:3.12-alpine3.20
+  aarch64: docker.io/library/ubuntu:24.04
+  amd64: docker.io/library/ubuntu:24.04
 labels:
   org.opencontainers.image.title: Epson Printer Tools
-  org.opencontainers.image.description: LAN discovery, nozzle check, head cleaning and usage telemetry for Epson inkjets
+  org.opencontainers.image.description: LAN discovery, nozzle check, head cleaning, usage telemetry and AirPrint bridge for Epson inkjets
   org.opencontainers.image.source: https://github.com/KhoaZero123/ha-epson-printer-tools
   org.opencontainers.image.licenses: MIT

@@ -89,6 +89,41 @@
   </section>
 
   <section>
+    <h2>AirPrint</h2>
+    <div class="grid">
+      <div class="stat"><div class="k">Trạng thái</div><div class="v" id="ap_state">—</div></div>
+      <div class="stat"><div class="k">Tên hiển thị</div><div class="v" id="ap_name">—</div></div>
+      <div class="stat"><div class="k">Hàng đợi CUPS</div><div class="v mono" id="ap_queue">—</div></div>
+      <div class="stat"><div class="k">mDNS/DNS-SD</div><div class="v" id="ap_avahi">—</div></div>
+    </div>
+    <div class="sub mono" id="ap_uri" style="margin-top:10px">—</div>
+    <div class="row" style="margin-top:12px">
+      <button class="ghost" id="ap_sync">Đồng bộ hàng đợi</button>
+      <button class="ghost" id="ap_off">Gỡ hàng đợi</button>
+    </div>
+    <div class="sub" style="margin-top:10px">iPhone/iPad: Cài đặt → Wi-Fi → máy in xuất hiện trong hộp thoại in. Không cần cài app.</div>
+  </section>
+
+  <section>
+    <h2>Cấu hình</h2>
+    <div class="row" style="margin-bottom:10px">
+      <label class="mut" style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="cfg_mqtt" style="width:auto"> Bật MQTT
+      </label>
+      <input type="text" id="cfg_mqtt_user" placeholder="MQTT user" style="flex:1 1 120px">
+      <input type="text" id="cfg_mqtt_pass" placeholder="MQTT password" style="flex:1 1 120px">
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="cfg_ap_name" placeholder="Tên AirPrint" style="flex:1 1 180px">
+      <input type="text" id="cfg_ap_loc" placeholder="Vị trí (ví dụ: Nha)" style="flex:1 1 120px">
+    </div>
+    <div class="row">
+      <button id="cfg_save">Lưu cấu hình</button>
+      <span class="sub">Lưu vào /data/settings.json — không bị Supervisor ghi đè khi khởi động lại.</span>
+    </div>
+  </section>
+
+  <section>
     <h2>Lịch sử</h2>
     <ul id="history"><li class="mut">Chưa có dữ liệu</li></ul>
   </section>
@@ -133,6 +168,16 @@ function render(s) {
   $("last_print").textContent = fmt(s.usage.last_print);
   $("last_clean").textContent = fmt(s.usage.last_clean);
   $("last_nozzle").textContent = fmt(s.usage.last_nozzle_check);
+  $("cfg_mqtt").checked = !!s.settings.mqtt_enabled;
+  $("cfg_ap_name").value = (s.airprint && s.airprint.info) || "";
+  $("cfg_ap_loc").value = (s.airprint && s.airprint.location) || "";
+  const ap = s.airprint || {};
+  $("ap_state").innerHTML = ap.enabled ? '<span class="pill ok">sẵn sàng</span>' :
+    `<span class="pill bad">${ap.error ? "lỗi" : "tắt"}</span>`;
+  $("ap_name").textContent = ap.info || "—";
+  $("ap_queue").textContent = ap.queue || "—";
+  $("ap_avahi").innerHTML = ap.avahi ? '<span class="pill ok">ON</span>' : '<span class="pill bad">OFF</span>';
+  $("ap_uri").textContent = ap.ipp_uri ? ap.ipp_uri.replace("{host}", location.hostname) : "—";
   const list = $("history");
   if (!s.history || !s.history.length) {
     list.innerHTML = '<li class="mut">Chưa có dữ liệu</li>';
@@ -194,6 +239,33 @@ async function run(action, label) {
   } catch (e) { msg("Lỗi: " + e.message); }
 }
 
+$("cfg_save").onclick = async () => {
+  const body = {
+    mqtt_enabled: $("cfg_mqtt").checked,
+    mqtt_username: $("cfg_mqtt_user").value.trim(),
+    airprint_name: $("cfg_ap_name").value.trim(),
+    airprint_location: $("cfg_ap_loc").value.trim(),
+  };
+  const pass = $("cfg_mqtt_pass").value.trim();
+  if (pass) body.mqtt_password = pass;
+  msg("Đang lưu cấu hình…");
+  try {
+    render((await post("/api/config", body)).state);
+    $("cfg_mqtt_pass").value = "";
+    msg("Đã lưu cấu hình.");
+  } catch (e) { msg("Lỗi: " + e.message); }
+};
+
+$("ap_sync").onclick = async () => {
+  msg("Đang đồng bộ hàng đợi AirPrint…");
+  try { render((await post("/api/airprint", { mode: "sync" })).state); msg("Đã đồng bộ."); }
+  catch (e) { msg("Lỗi: " + e.message); }
+};
+$("ap_off").onclick = async () => {
+  if (!window.confirm("Gỡ hàng đợi AirPrint? Máy in sẽ không còn xuất hiện trên iPhone.")) return;
+  try { render((await post("/api/airprint", { mode: "disable" })).state); msg("Đã gỡ hàng đợi."); }
+  catch (e) { msg("Lỗi: " + e.message); }
+};
 $("nozzle").onclick = () => run("nozzle_check", "kiểm tra kim phun");
 $("clean").onclick = () => run("head_clean", "vệ sinh đầu in");
 $("refresh").onclick = async () => {

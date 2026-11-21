@@ -3,11 +3,13 @@
 import datetime
 import json
 import os
+import re
 import sys
 import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import airprint
 import discovery
 import lpr
 import printer
@@ -17,7 +19,11 @@ from mqtt_bridge import MqttBridge
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
-OPTIONS_PATH = os.path.join(os.environ.get("DATA_DIR", "/data"), "options.json")
+DATA_DIR = os.environ.get("DATA_DIR", "/data")
+OPTIONS_PATH = os.path.join(DATA_DIR, "options.json")
+# Runtime overrides written by the UI/API: Supervisor regenerates options.json on
+# every start, so anything the user changes here has to live in its own file.
+SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 INGRESS_PORT = int(os.environ.get("INGRESS_PORT", "8099"))
 
 _lock = threading.Lock()
@@ -31,7 +37,24 @@ def load_options():
         return {}
 
 
-OPTIONS = load_options()
+def load_overrides():
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_overrides(data):
+    merged = load_overrides()
+    merged.update({k: v for k, v in data.items() if v is not None})
+    with open(SETTINGS_PATH, "w", encoding="utf-8") as handle:
+        json.dump(merged, handle, indent=2, sort_keys=True)
+    return merged
+
+
+OPTIONS = {**load_options(), **load_overrides()}
 STATE = store.load()
 
 
@@ -142,12 +165,64 @@ def public_state():
             "last_nozzle_check": snapshot.get("last_nozzle_check"),
             "last_poll": snapshot.get("last_poll"),
         },
+        "airprint": airprint.status(),
         "history": snapshot.get("history", [])[:10],
         "server_time": now_iso(),
     }
 
 
 BRIDGE = None
+
+
+def airprint_settings():
+    name = (OPTIONS.get("airprint_name") or "Epson L8050 AirPrint").strip()
+    queue = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("_") or airprint.DEFAULT_QUEUE
+    return {
+        "enabled": bool(OPTIONS.get("airprint_enabled", True)),
+        "name": name,
+        "queue": queue,
+        "location": (OPTIONS.get("airprint_location") or "").strip(),
+    }
+
+
+def sync_airprint(reason="startup"):
+    settings = airprint_settings()
+    ip = STATE.get("printer_ip")
+    if not settings["enabled"]:
+        airprint.disable(airprint.DEFAULT_QUEUE)
+        log("airprint disabled by options")
+        return airprint.status()
+    if not ip:
+        log(f"airprint {reason}: no printer IP yet")
+        return airprint.status()
+    result = airprint.sync(ip, settings["queue"], settings["name"], settings["location"])
+    with _lock:
+        STATE["airprint_enabled"] = bool(result.get("enabled"))
+        STATE["airprint_queue"] = result.get("queue")
+        STATE["airprint_ipp"] = result.get("ipp_uri")
+        store.save(STATE)
+    if result.get("enabled"):
+        log(f"airprint {reason}: queue '{settings['queue']}' -> socket://{ip}:9100")
+    else:
+        log(f"airprint {reason}: not active ({result.get('error')})")
+    if BRIDGE:
+        BRIDGE.publish_state(STATE)
+    return result
+
+
+def restart_bridge():
+    global BRIDGE
+    if BRIDGE:
+        try:
+            BRIDGE.stop()
+        except Exception:  # noqa: BLE001 - bridge teardown must never break the API
+            log("mqtt bridge stop failed: " + traceback.format_exc(limit=1))
+    BRIDGE = MqttBridge({**OPTIONS, "slug": os.environ.get("ADDON_SLUG", "epson_printer_tools")},
+                        mqtt_command)
+    if BRIDGE.start():
+        log("MQTT bridge connected, discovery published")
+        BRIDGE.publish_state(STATE)
+    return BRIDGE
 
 
 def mqtt_command(action):
@@ -165,6 +240,10 @@ def poller():
                 refresh_state()
                 if BRIDGE:
                     BRIDGE.publish_state(STATE)
+                settings = airprint_settings()
+                current = airprint.status()
+                if settings["enabled"] and not current.get("enabled"):
+                    sync_airprint("watchdog")
         except Exception:  # noqa: BLE001 - keep polling after transient errors
             log("poller error: " + traceback.format_exc(limit=2))
         threading.Event().wait(interval)
@@ -233,6 +312,8 @@ class Handler(BaseHTTPRequestHandler):
                 log(f"printer set to {ip or '(none)'}")
                 if ip:
                     threading.Thread(target=refresh_state, args=(ip,), daemon=True).start()
+                    threading.Thread(target=sync_airprint, args=("printer changed",),
+                                     daemon=True).start()
                 return self._json(200, public_state())
             if path == "/api/action":
                 action = body.get("action")
@@ -240,6 +321,35 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(400, {"error": "action must be nozzle_check or head_clean"})
                 result = run_action(action)
                 return self._json(200, {"ok": True, "result": result, "state": public_state()})
+            if path == "/api/airprint":
+                mode = (body.get("mode") or "sync").strip()
+                if mode == "disable":
+                    result = airprint.disable(airprint_settings()["queue"])
+                    log("airprint queue removed on request")
+                else:
+                    result = sync_airprint("manual")
+                return self._json(200, {"ok": True, "airprint": result, "state": public_state()})
+            if path == "/api/config":
+                allowed = {"mqtt_enabled", "mqtt_host", "mqtt_port", "mqtt_username",
+                           "mqtt_password", "mqtt_prefix", "poll_interval", "utc_offset",
+                           "airprint_enabled", "airprint_name", "airprint_location",
+                           "printer_ip"}
+                patch = {k: body[k] for k in allowed if k in body}
+                if not patch:
+                    return self._json(400, {"error": "nothing to update"})
+                overrides = save_overrides(patch)
+                OPTIONS.update(overrides)
+                log("settings updated: " + ", ".join(sorted(patch)))
+                if "printer_ip" in patch:
+                    with _lock:
+                        STATE["printer_ip"] = str(patch["printer_ip"]).strip()
+                        STATE["pages_total"] = None
+                        store.save(STATE)
+                    threading.Thread(target=refresh_state, daemon=True).start()
+                restart_bridge()
+                threading.Thread(target=sync_airprint, args=("settings changed",),
+                                 daemon=True).start()
+                return self._json(200, {"ok": True, "settings": sorted(overrides), "state": public_state()})
             if path == "/api/refresh":
                 refresh_state()
                 return self._json(200, public_state())
@@ -255,10 +365,8 @@ def main():
         STATE["printer_ip"] = OPTIONS["printer_ip"]
         store.save(STATE)
     log("starting on port %d, printer=%s" % (INGRESS_PORT, STATE.get("printer_ip") or "-"))
-    BRIDGE = MqttBridge({**OPTIONS, "slug": os.environ.get("ADDON_SLUG", "epson_printer_tools")},
-                        mqtt_command)
-    if BRIDGE.start():
-        log("MQTT bridge connected, discovery published")
+    restart_bridge()
+    threading.Thread(target=sync_airprint, args=("startup",), daemon=True).start()
     threading.Thread(target=poller, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", INGRESS_PORT), Handler)
     try:

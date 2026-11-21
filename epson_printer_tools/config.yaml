@@ -1,10 +1,11 @@
 name: Epson Printer Tools
-version: "1.0.0"
+version: "1.1.0"
 slug: epson_printer_tools
 description: >-
   Discover Epson inkjets on the LAN (or set the IP manually), run nozzle check and
-  head cleaning as native ESC/P-R jobs over LPR, and track usage counters with
-  derived "last print" / "last head cleaning" timestamps.
+  head cleaning as native ESC/P-R jobs over LPR, track usage counters with
+  derived "last print" / "last head cleaning" timestamps, and share the printer to
+  iPhone/iPad/Mac as an AirPrint queue (CUPS + mDNS inside the add-on).
 url: https://github.com/KhoaZero123/ha-epson-printer-tools
 arch:
   - aarch64
@@ -30,6 +31,9 @@ options:
   mqtt_username: ""
   mqtt_password: ""
   mqtt_prefix: epson_printer
+  airprint_enabled: true
+  airprint_name: Epson L8050 AirPrint
+  airprint_location: ""
 schema:
   printer_ip: str?
   scan_subnet: str?
@@ -41,3 +45,6 @@ schema:
   mqtt_username: str?
   mqtt_password: password?
   mqtt_prefix: str?
+  airprint_enabled: bool
+  airprint_name: str?
+  airprint_location: str?
