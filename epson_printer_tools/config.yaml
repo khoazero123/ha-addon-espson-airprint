@@ -1,5 +1,5 @@
 name: Epson Printer Tools
-version: "1.1.0"
+version: "1.1.1"
 slug: epson_printer_tools
 description: >-
   Discover Epson inkjets on the LAN (or set the IP manually), run nozzle check and
@@ -10,6 +10,7 @@ url: https://github.com/khoazero123/ha-addon-espson-airprint
 arch:
   - aarch64
   - amd64
+image: ghcr.io/khoazero123/{arch}-epson-printer-tools
 init: false
 startup: application
 boot: auto

@@ -121,13 +121,10 @@ run `ha supervisor reload`.
 ## Publishing images
 
 `.github/workflows/build.yaml` builds both architectures and pushes
-`ghcr.io/<owner>/<arch>-epson-printer-tools:<version>` on a `v*` tag. When those images
-exist, add this line to `epson_printer_tools/config.yaml` so installations pull instead of
-building locally (Supervisor prefers `image` over `build`):
-
-```yaml
-image: ghcr.io/khoazero123/{arch}-epson-printer-tools
-```
+`ghcr.io/khoazero123/<arch>-epson-printer-tools:<version>` on a `v*` tag. Those images are
+public, and `epson_printer_tools/config.yaml` already references them via
+`image: ghcr.io/khoazero123/{arch}-epson-printer-tools`, so installing the add-on pulls the
+prebuilt image instead of compiling on the device.
 
 ## License
 
