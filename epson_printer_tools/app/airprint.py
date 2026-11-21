@@ -1,8 +1,8 @@
 """AirPrint bridge: expose the LAN printer through CUPS (IPP) + mDNS/DNS-SD.
 
 CUPS renders the job locally with the Epson ESC/P-R driver, then relays it to the
-printer's raw port 9100 -- the same path the previous NAS container used, but the
-queue and the advertisement live inside this add-on.
+printer's raw port 9100. The queue and the advertisement live inside this add-on, so
+no separate print server is involved.
 """
 
 import hashlib
@@ -20,7 +20,7 @@ DRIVER = "/usr/lib/cups/driver/escpr"
 PPD_DIR = os.path.join(os.environ.get("DATA_DIR", "/data"), "airprint")
 DEFAULT_QUEUE = "L8050"
 # The L8050 ships with no own PPD in escpr 1.7.x; the L805 Series PPD is the
-# ESC/P-R model Epson's own driver maps it to (same engine, verified on the NAS).
+# ESC/P-R model Epson's own driver maps a L8050 to, verified on real hardware.
 MODEL_HINTS = ("L8050", "L805 Series", "L805", "ET-1810", "L18050")
 
 _lock = threading.Lock()

@@ -78,15 +78,6 @@ iOS/iPadOS: open any document → Share → Print → the printer shows up under
 If it does not appear, check the *AirPrint* card in the web UI: `mDNS/DNS-SD` must be `ON`,
 and the queue must be `sẵn sàng` (*ready*).
 
-## Removing the old CUPS-on-NAS container
-
-This add-on replaces a standalone `cups-airprint` container. After installing:
-
-```bash
-docker stop cups-airprint
-docker update --restart=no cups-airprint   # keeps it from coming back after a reboot
-```
-
 ## Building locally (development)
 
 ```bash
