@@ -106,6 +106,10 @@
 
   <section>
     <h2>Cấu hình</h2>
+    <div class="row" style="margin-bottom:12px">
+      <button class="ghost" id="show_api_token">Hiện token cho HA integration</button>
+      <code class="mono" id="integration_token" style="word-break:break-all"></code>
+    </div>
     <div class="row" style="margin-bottom:10px">
       <label class="mut" style="display:flex;gap:8px;align-items:center">
         <input type="checkbox" id="cfg_mqtt" style="width:auto"> Bật MQTT
@@ -254,6 +258,16 @@ $("cfg_save").onclick = async () => {
     $("cfg_mqtt_pass").value = "";
     msg("Đã lưu cấu hình.");
   } catch (e) { msg("Lỗi: " + e.message); }
+};
+
+$("show_api_token").onclick = async () => {
+  try {
+    const response = await fetch(api("/api/integration-token"), {cache: "no-store"});
+    if (!response.ok) throw new Error("Chỉ xem được qua Home Assistant ingress.");
+    const result = await response.json();
+    $("integration_token").textContent = result.token;
+    $("show_api_token").disabled = true;
+  } catch (e) { msg("Không lấy được token: " + e.message); }
 };
 
 $("ap_sync").onclick = async () => {

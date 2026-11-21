@@ -1,0 +1,54 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Epson Printer Tools",
+        "description": "Point this integration at the Epson Printer Tools add-on. Use the add-on host and port, for example http://homeassistant.local:8099.",
+        "data": {
+          "url": "Add-on URL",
+          "token": "API token (optional)"
+        },
+        "data_description": {
+          "url": "Base URL of the add-on REST API.",
+          "token": "Bearer token configured in the add-on, if API protection is enabled."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Epson Printer Tools",
+        "description": "The add-on at {url} rejected the stored token. Enter the current token.",
+        "data": {
+          "token": "API token"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "The URL is not valid.",
+      "invalid_auth": "The add-on rejected the API token.",
+      "cannot_connect": "Could not reach the add-on API.",
+      "already_configured": "This add-on URL is already configured.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This add-on URL is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Epson Printer Tools options",
+        "data": {
+          "url": "Add-on URL",
+          "token": "API token (optional)",
+          "scan_interval": "Poll interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "The URL is not valid.",
+      "invalid_auth": "The add-on rejected the API token.",
+      "cannot_connect": "Could not reach the add-on API.",
+      "already_configured": "This add-on URL is already configured."
+    }
+  }
+}

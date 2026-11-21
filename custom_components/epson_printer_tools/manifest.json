@@ -1,0 +1,12 @@
+{
+  "domain": "epson_printer_tools",
+  "name": "Epson Printer Tools",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/khoazero123/ha-addon-espson-airprint",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/khoazero123/ha-addon-espson-airprint/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

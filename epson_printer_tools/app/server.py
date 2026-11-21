@@ -4,6 +4,8 @@ import datetime
 import json
 import os
 import re
+import secrets
+import socket
 import sys
 import threading
 import traceback
@@ -24,9 +26,35 @@ OPTIONS_PATH = os.path.join(DATA_DIR, "options.json")
 # Runtime overrides written by the UI/API: Supervisor regenerates options.json on
 # every start, so anything the user changes here has to live in its own file.
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
+TOKEN_PATH = os.path.join(DATA_DIR, "api-token")
 INGRESS_PORT = int(os.environ.get("INGRESS_PORT", "8099"))
 
 _lock = threading.Lock()
+
+def api_token():
+    """Persist a credential across add-on updates without exposing it in options/logs."""
+    try:
+        with open(TOKEN_PATH, "r", encoding="ascii") as handle:
+            token = handle.read().strip()
+        if len(token) >= 32:
+            return token
+    except FileNotFoundError:
+        pass
+    token = secrets.token_urlsafe(32)
+    fd = os.open(TOKEN_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="ascii") as handle:
+        handle.write(token + "\n")
+    return token
+
+API_TOKEN = api_token()
+
+def supervisor_addresses():
+    try:
+        return {addr[4][0] for addr in socket.getaddrinfo("supervisor", None)}
+    except OSError:
+        return set()
+
+SUPERVISOR_ADDRESSES = supervisor_addresses()
 
 # airprint.py is the largest module and the one a partial deploy damages first (a
 # truncated copy imports fine but exports nothing). Check its API once at import so
@@ -300,6 +328,21 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "epson_printer_tools"
     protocol_version = "HTTP/1.1"
 
+    def _authorized(self):
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer ") and secrets.compare_digest(auth[7:], API_TOKEN):
+            return True
+        # The Supervisor is the ingress proxy. A header by itself is not proof:
+        # arbitrary LAN clients can forge X-Ingress-Path, so require its peer IP.
+        ingress_path = self.headers.get("X-Ingress-Path", "")
+        return self.client_address[0] in SUPERVISOR_ADDRESSES and bool(ingress_path)
+
+    def _require_auth(self):
+        if self._authorized():
+            return False
+        self._json(401, {"error": "authentication required"})
+        return True
+
     def log_message(self, fmt, *args):
         pass
 
@@ -326,10 +369,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        if path in ("/api/state", "/state"):
-            return self._json(200, public_state())
         if path in ("/healthz",):
             return self._json(200, {"ok": True})
+        if path == "/api/integration-token":
+            # The bearer token must never be able to retrieve a copy of itself.
+            # Only authenticated HA ingress (Supervisor peer + ingress header)
+            # may show it to a user configuring the native integration.
+            if (self.client_address[0] not in SUPERVISOR_ADDRESSES
+                    or not self.headers.get("X-Ingress-Path")):
+                return self._json(403, {"error": "open this page through Home Assistant ingress"})
+            return self._json(200, {"token": API_TOKEN})
+        if self._require_auth():
+            return
+        if path in ("/api/state", "/state"):
+            return self._json(200, public_state())
         if path in ("/", "/index.html") or not path.startswith("/api"):
             return self._serve_index()
         return self._json(404, {"error": "not found"})
@@ -342,6 +395,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, b"UI missing", "text/plain")
 
     def do_POST(self):
+        if self._require_auth():
+            return
         path = self.path.split("?", 1)[0]
         body = self._body()
         try:
