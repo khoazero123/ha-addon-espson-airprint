@@ -6,7 +6,7 @@ description: >-
   head cleaning as native ESC/P-R jobs over LPR, track usage counters with
   derived "last print" / "last head cleaning" timestamps, and share the printer to
   iPhone/iPad/Mac as an AirPrint queue (CUPS + mDNS inside the add-on).
-url: https://github.com/KhoaZero123/ha-epson-printer-tools
+url: https://github.com/khoazero123/ha-addon-espson-airprint
 arch:
   - aarch64
   - amd64

@@ -37,7 +37,7 @@ that field at runtime and keeps the rest of the payload byte-identical to the ca
 ## Installation
 
 1. Home Assistant → **Settings → Add-ons → Add-on Store → ⋮ → Repositories**
-2. Add `https://github.com/KhoaZero123/ha-epson-printer-tools`
+2. Add `https://github.com/khoazero123/ha-addon-espson-airprint`
 3. Install **Epson Printer Tools** (builds locally, aarch64/amd64), start it, open the
    add-on page and press **Open Web UI** (ingress panel *Epson Printer*).
 

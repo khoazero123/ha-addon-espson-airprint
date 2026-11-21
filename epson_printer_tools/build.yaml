@@ -4,5 +4,5 @@ build_from:
 labels:
   org.opencontainers.image.title: Epson Printer Tools
   org.opencontainers.image.description: LAN discovery, nozzle check, head cleaning, usage telemetry and AirPrint bridge for Epson inkjets
-  org.opencontainers.image.source: https://github.com/KhoaZero123/ha-epson-printer-tools
+  org.opencontainers.image.source: https://github.com/khoazero123/ha-addon-espson-airprint
   org.opencontainers.image.licenses: MIT
