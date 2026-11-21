@@ -26,20 +26,27 @@ that field at runtime and keeps the rest of the payload byte-identical to the ca
 - **Manual IP** — type an address for printers on another subnet or when scanning is blocked.
 - **Nozzle check / head cleaning** — one button each in the ingress UI and in Home Assistant.
 - **Usage telemetry** — `prtMarkerLifeCount` (total pages) polled over SNMP; when the counter
-  grows, the add-on stamps *last print*, so jobs sent from phones, CUPS or Epson Connect are
+  grows, the add-on stamps *last print*, so jobs sent from phones or Epson Connect are
   caught too. Cleaning never prints, so *last head cleaning* is stamped when the job is sent.
-- **AirPrint bridge** — CUPS inside the add-on holds a queue for the printer (ESC/P-R driver,
+- **AirPrint bridge** — the add-on holds a print queue for the printer (ESC/P-R driver,
   relaying to the printer's raw port 9100) and advertises it over mDNS/DNS-SD, so iOS and
   macOS list it in the print dialog without any app.
-- **Optional MQTT discovery** — `sensor` (status, pages, last print, last clean),
-  `binary_sensor` (AirPrint bridge) and two `button` entities in Home Assistant.
+- **Native Home Assistant integration** — local API polling exposes status, pages, timestamps,
+  AirPrint availability and two action buttons. MQTT is optional for legacy installations.
 
 ## Installation
 
 1. Home Assistant → **Settings → Add-ons → Add-on Store → ⋮ → Repositories**
 2. Add `https://github.com/khoazero123/ha-addon-espson-airprint`
-3. Install **Epson Printer Tools** (builds locally, aarch64/amd64), start it, open the
-   add-on page and press **Open Web UI** (ingress panel *Epson Printer*).
+3. Install **Epson Printer Tools** (pulls the published image for aarch64/amd64), start it,
+   open the add-on page and press **Open Web UI**.
+4. In the add-on UI, select **Show token for HA integration** and copy the token privately.
+5. Copy [`custom_components/epson_printer_tools`](custom_components/epson_printer_tools) to
+   `/config/custom_components/epson_printer_tools/`, restart Home Assistant Core, then go to
+   **Settings → Devices & services → Add integration → Epson Printer Tools**. Enter the add-on
+   URL (`http://homeassistant.local:8099` or your HA host address) and the token. The native
+   integration polls `/api/state` with Bearer authentication and sends button actions to
+   `/api/action`; `/healthz` remains publicly accessible for health checks.
 
 The container uses the host network: it needs LPR 515, SNMP 161 and IPP 631 on the LAN, plus
 UDP 5353 for mDNS.
@@ -67,7 +74,7 @@ in `/data/settings.json` and merged over the options at boot.
 
 ## AirPrint
 
-The add-on runs CUPS with the Epson ESC/P-R PPD (`printer-driver-escpr`) and Avahi:
+The add-on runs a local IPP print service with the Epson ESC/P-R driver and mDNS advertisement:
 
 - queue device: `socket://<printer_ip>:9100` (raw ESC/P-R, no cloud round-trip)
 - queue name: sanitized from `airprint_name` (spaces become `_`)
