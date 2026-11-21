@@ -28,6 +28,54 @@ INGRESS_PORT = int(os.environ.get("INGRESS_PORT", "8099"))
 
 _lock = threading.Lock()
 
+# airprint.py is the largest module and the one a partial deploy damages first (a
+# truncated copy imports fine but exports nothing). Check its API once at import so
+# every caller gets a readable error instead of a dead thread or AttributeError spam.
+AIRPRINT_API = ("available", "start_cupsd", "sync", "status", "disable")
+AIRPRINT_MISSING = [name for name in AIRPRINT_API if not hasattr(airprint, name)]
+AIRPRINT_QUEUE = getattr(airprint, "DEFAULT_QUEUE", "L8050")
+
+def airprint_error(message):
+    return {
+        "available": False,
+        "enabled": False,
+        "cupsd": False,
+        "queue": None,
+        "device_uri": None,
+        "ipp_uri": None,
+        "info": None,
+        "location": None,
+        "updated": None,
+        "error": message,
+    }
+
+def airprint_status():
+    if AIRPRINT_MISSING:
+        return airprint_error("airprint module incomplete, missing: " + ", ".join(AIRPRINT_MISSING))
+    try:
+        return airprint.status()
+    except Exception as exc:  # noqa: BLE001 - surface the reason in the UI, keep serving
+        log("airprint status failed: " + traceback.format_exc(limit=1))
+        return airprint_error(f"{type(exc).__name__}: {exc}")
+
+def airprint_sync(ip, queue, name, location):
+    if AIRPRINT_MISSING:
+        return airprint_error("airprint module incomplete, missing: " + ", ".join(AIRPRINT_MISSING))
+    try:
+        return airprint.sync(ip, queue, name, location)
+    except Exception as exc:  # noqa: BLE001 - a failed sync must not kill the watchdog
+        log("airprint sync failed: " + traceback.format_exc(limit=1))
+        return airprint_error(f"{type(exc).__name__}: {exc}")
+
+def airprint_disable(queue=None):
+    if "disable" in AIRPRINT_MISSING:
+        return airprint_error("airprint module incomplete, missing: disable")
+    try:
+        return airprint.disable(queue or AIRPRINT_QUEUE)
+    except Exception as exc:  # noqa: BLE001
+        log("airprint disable failed: " + traceback.format_exc(limit=1))
+        return airprint_error(f"{type(exc).__name__}: {exc}")
+
 
 def load_options():
     try:
@@ -165,7 +213,7 @@ def public_state():
             "last_nozzle_check": snapshot.get("last_nozzle_check"),
             "last_poll": snapshot.get("last_poll"),
         },
-        "airprint": airprint.status(),
+        "airprint": airprint_status(),
         "history": snapshot.get("history", [])[:10],
         "server_time": now_iso(),
     }
@@ -176,7 +224,7 @@ BRIDGE = None
 
 def airprint_settings():
     name = (OPTIONS.get("airprint_name") or "Epson L8050 AirPrint").strip()
-    queue = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("_") or airprint.DEFAULT_QUEUE
+    queue = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("_") or AIRPRINT_QUEUE
     return {
         "enabled": bool(OPTIONS.get("airprint_enabled", True)),
         "name": name,
@@ -189,13 +237,12 @@ def sync_airprint(reason="startup"):
     settings = airprint_settings()
     ip = STATE.get("printer_ip")
     if not settings["enabled"]:
-        airprint.disable(airprint.DEFAULT_QUEUE)
         log("airprint disabled by options")
-        return airprint.status()
+        return airprint_disable()
     if not ip:
         log(f"airprint {reason}: no printer IP yet")
-        return airprint.status()
-    result = airprint.sync(ip, settings["queue"], settings["name"], settings["location"])
+        return airprint_status()
+    result = airprint_sync(ip, settings["queue"], settings["name"], settings["location"])
     with _lock:
         STATE["airprint_enabled"] = bool(result.get("enabled"))
         STATE["airprint_queue"] = result.get("queue")
@@ -241,7 +288,7 @@ def poller():
                 if BRIDGE:
                     BRIDGE.publish_state(STATE)
                 settings = airprint_settings()
-                current = airprint.status()
+                current = airprint_status()
                 if settings["enabled"] and not current.get("enabled"):
                     sync_airprint("watchdog")
         except Exception:  # noqa: BLE001 - keep polling after transient errors
@@ -324,7 +371,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/airprint":
                 mode = (body.get("mode") or "sync").strip()
                 if mode == "disable":
-                    result = airprint.disable(airprint_settings()["queue"])
+                    result = airprint_disable(airprint_settings()["queue"])
                     log("airprint queue removed on request")
                 else:
                     result = sync_airprint("manual")
@@ -365,6 +412,9 @@ def main():
         STATE["printer_ip"] = OPTIONS["printer_ip"]
         store.save(STATE)
     log("starting on port %d, printer=%s" % (INGRESS_PORT, STATE.get("printer_ip") or "-"))
+    if AIRPRINT_MISSING:
+        log("ERROR: airprint module incomplete, missing: " + ", ".join(AIRPRINT_MISSING))
+        log("ERROR: AirPrint stays disabled until the add-on is reinstalled or rebuilt")
     restart_bridge()
     threading.Thread(target=sync_airprint, args=("startup",), daemon=True).start()
     threading.Thread(target=poller, daemon=True).start()
