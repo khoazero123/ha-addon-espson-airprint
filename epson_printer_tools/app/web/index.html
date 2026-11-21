@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Epson Printer Tools</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #111418; color: #e6e8eb; }
+  header { padding: 18px 20px 10px; border-bottom: 1px solid #232a31; }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  .sub { color: #8b949e; font-size: 13px; margin-top: 4px; }
+  main { padding: 16px 20px 40px; max-width: 900px; }
+  section { background: #171b20; border: 1px solid #232a31; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #8b949e; margin: 0 0 12px; font-weight: 600; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=text] { flex: 1 1 200px; min-width: 160px; background: #0d1116; border: 1px solid #2b333c;
+        color: #e6e8eb; padding: 9px 11px; border-radius: 8px; font-size: 14px; }
+  button { background: #1f6feb; color: #fff; border: 0; padding: 9px 14px; border-radius: 8px;
+           font-size: 14px; cursor: pointer; font-weight: 500; }
+  button.ghost { background: #222a33; color: #c9d1d9; }
+  button.warn { background: #2f81f7; }
+  button:disabled { opacity: .55; cursor: default; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat { background: #0f1318; border: 1px solid #212831; border-radius: 8px; padding: 11px 12px; }
+  .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #7d8794; }
+  .stat .v { font-size: 16px; margin-top: 5px; font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .ok { background: #12351f; color: #3fb950; }
+  .busy { background: #3a2d0a; color: #d29922; }
+  .bad { background: #3d1618; color: #f85149; }
+  .mut { color: #8b949e; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 7px 0; border-bottom: 1px solid #1d242b; font-size: 13px; display: flex; justify-content: space-between; gap: 10px; }
+  li:last-child { border-bottom: 0; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #msg { font-size: 13px; color: #d29922; min-height: 18px; margin-top: 10px; }
+  .found { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1d242b; }
+  .found:last-child { border-bottom: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Epson Printer Tools</h1>
+  <div class="sub">LAN discovery · nozzle check · head cleaning · usage telemetry</div>
+</header>
+<main>
+  <section>
+    <h2>Máy in</h2>
+    <div class="row">
+      <input type="text" id="ip" placeholder="192.168.1.108" inputmode="decimal">
+      <button id="save">Lưu &amp; kiểm tra</button>
+      <button id="scan" class="ghost">Quét LAN</button>
+    </div>
+    <div id="found"></div>
+    <div id="msg"></div>
+  </section>
+
+  <section>
+    <h2>Trạng thái</h2>
+    <div class="grid">
+      <div class="stat"><div class="k">Printer state</div><div class="v" id="st">—</div></div>
+      <div class="stat"><div class="k">Model</div><div class="v" id="model">—</div></div>
+      <div class="stat"><div class="k">Serial</div><div class="v mono" id="serial">—</div></div>
+      <div class="stat"><div class="k">Cập nhật</div><div class="v" id="poll">—</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Sử dụng</h2>
+    <div class="grid">
+      <div class="stat"><div class="k">Tổng số trang</div><div class="v" id="pages">—</div></div>
+      <div class="stat"><div class="k">In lần cuối</div><div class="v" id="last_print">—</div></div>
+      <div class="stat"><div class="k">Vệ sinh đầu in cuối</div><div class="v" id="last_clean">—</div></div>
+      <div class="stat"><div class="k">Kiểm tra kim phun cuối</div><div class="v" id="last_nozzle">—</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bảo trì</h2>
+    <div class="row">
+      <button class="warn" id="nozzle">Kiểm tra kim phun (in 1 tờ)</button>
+      <button class="ghost" id="clean">Vệ sinh đầu in (không in)</button>
+      <button class="ghost" id="refresh">Làm mới</button>
+    </div>
+    <div class="sub" style="margin-top:10px">Mỗi lần bấm gửi đúng 1 job LPR tới cổng 515 — không có tuỳ chọn cấp độ.</div>
+  </section>
+
+  <section>
+    <h2>Lịch sử</h2>
+    <ul id="history"><li class="mut">Chưa có dữ liệu</li></ul>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const base = location.pathname.replace(/\/$/, "").replace(/\/index\.html$/, "");
+const api = (path) => base + path;
+
+function fmt(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (isNaN(d)) return ts;
+  return d.toLocaleString("vi-VN", { hour12: false });
+}
+
+function statePill(value) {
+  const v = (value || "").toLowerCase();
+  if (v === "idle") return '<span class="pill ok">idle</span>';
+  if (v === "processing") return '<span class="pill busy">processing</span>';
+  if (!v) return '<span class="pill bad">offline</span>';
+  return `<span class="pill busy">${value}</span>`;
+}
+
+function msg(text) { $("msg").textContent = text || ""; }
+
+async function post(path, body) {
+  const res = await fetch(api(path), { method: "POST", headers: { "Content-Type": "application/json" },
+                                       body: JSON.stringify(body || {}) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function render(s) {
+  $("ip").value = s.settings.printer_ip || "";
+  $("st").innerHTML = statePill(s.printer.state);
+  $("model").textContent = s.printer.model || "—";
+  $("serial").textContent = s.printer.serial || "—";
+  $("poll").textContent = fmt(s.usage.last_poll);
+  $("pages").textContent = s.usage.pages_total ?? "—";
+  $("last_print").textContent = fmt(s.usage.last_print);
+  $("last_clean").textContent = fmt(s.usage.last_clean);
+  $("last_nozzle").textContent = fmt(s.usage.last_nozzle_check);
+  const list = $("history");
+  if (!s.history || !s.history.length) {
+    list.innerHTML = '<li class="mut">Chưa có dữ liệu</li>';
+  } else {
+    list.innerHTML = s.history.map((h) => {
+      const detail = h.event === "print" ? `${h.pages} trang (bộ đếm)` :
+                     `${h.bytes} B · ${h.event}`;
+      return `<li><span>${fmt(h.at)}</span><span class="mut">${detail}</span></li>`;
+    }).join("");
+  }
+}
+
+async function load() {
+  try {
+    const res = await fetch(api("/api/state"));
+    render(await res.json());
+  } catch (e) { msg("Không đọc được trạng thái: " + e.message); }
+}
+
+$("save").onclick = async () => {
+  const ip = $("ip").value.trim();
+  msg("Đang kiểm tra " + ip + "…");
+  try {
+    const s = await post("/api/settings", { printer_ip: ip });
+    render(s);
+    msg(s.printer.reachable ? "Đã kết nối máy in." : "Đã lưu IP nhưng chưa phản hồi.");
+  } catch (e) { msg("Lỗi: " + e.message); }
+};
+
+$("scan").onclick = async () => {
+  const button = $("scan");
+  button.disabled = true; msg("Đang quét LAN, mất vài giây…");
+  $("found").innerHTML = "";
+  try {
+    const r = await post("/api/scan", {});
+    if (!r.printers.length) {
+      msg(`Quét ${r.subnet} (${r.scanned} host) — không thấy máy in. Nhập IP thủ công.`);
+    } else {
+      msg(`Quét ${r.subnet}: tìm thấy ${r.printers.length} máy in.`);
+      $("found").innerHTML = r.printers.map((p) =>
+        `<div class="found"><span class="mono">${p.host}</span>
+         <span class="mut">${p.model || p.serial || ""} ${p.status || ""}</span>
+         <button class="ghost" onclick="pick('${p.host}')">Chọn</button></div>`
+      ).join("");
+    }
+  } catch (e) { msg("Lỗi quét: " + e.message); }
+  button.disabled = false;
+};
+
+window.pick = (ip) => { $("ip").value = ip; $("save").click(); };
+
+async function run(action, label) {
+  if (!window.confirm(`Gửi lệnh ${label} tới máy in?`)) return;
+  msg("Đang gửi " + label + "…");
+  try {
+    const r = await post("/api/action", { action });
+    render(r.state);
+    msg(`Đã gửi ${label} lúc ${fmt(r.result.timestamp)} (${r.result.data_bytes} B).`);
+  } catch (e) { msg("Lỗi: " + e.message); }
+}
+
+$("nozzle").onclick = () => run("nozzle_check", "kiểm tra kim phun");
+$("clean").onclick = () => run("head_clean", "vệ sinh đầu in");
+$("refresh").onclick = async () => {
+  try { render(await post("/api/refresh", {})); msg("Đã làm mới."); }
+  catch (e) { msg("Lỗi: " + e.message); }
+};
+
+load();
+setInterval(load, 20000);
+</script>
+</body>
+</html>
