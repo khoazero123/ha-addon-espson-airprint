@@ -1,5 +1,5 @@
 name: Epson Printer Tools
-version: "1.1.4"
+version: "1.1.5"
 slug: epson_printer_tools
 description: >-
   Discover Epson inkjets on the LAN (or set the IP manually), run nozzle check and

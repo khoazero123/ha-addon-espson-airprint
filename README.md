@@ -82,6 +82,9 @@ The add-on runs a local IPP print service with the Epson ESC/P-R driver and mDNS
 - queue name: sanitized from `airprint_name` (spaces become `_`)
 - mDNS instance: `<airprint_name>`, host `<host-name>.local` on the LAN interface only
 - IPP endpoint: `ipp://<home-assistant-ip>:631/printers/<queue>`
+- Black-and-white selection maps IPP `print-color-mode=monochrome` to the Epson driver's
+  `Ink=MONO` through PPD color presets. `print-color-mode=color` maps to `Ink=COLOR`.
+  The queue defaults to color when the client does not request monochrome.
 
 iOS/iPadOS: open any document → Share → Print → the printer shows up under the given name.
 If it does not appear, check the *AirPrint* card in the web UI: `mDNS/DNS-SD` must be `ON`,

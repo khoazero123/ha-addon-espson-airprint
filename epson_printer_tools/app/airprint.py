@@ -22,6 +22,14 @@ DEFAULT_QUEUE = "L8050"
 # The L8050 ships with no own PPD in escpr 1.7.x; the L805 Series PPD is the
 # ESC/P-R model Epson's own driver maps a L8050 to, verified on real hardware.
 MODEL_HINTS = ("L8050", "L805 Series", "L805", "ET-1810", "L18050")
+MONO_PRESET = ('*APPrinterPreset Gray_with_Paper_Auto-Detect/Black and White: '
+               '"*Ink MONO com.apple.print.preset.graphicsType General '
+               'com.apple.print.preset.quality mid '
+               'com.apple.print.preset.output-mode monochrome"')
+COLOR_PRESET = ('*APPrinterPreset Color_with_Paper_Auto-Detect/Color: '
+                '"*Ink COLOR com.apple.print.preset.graphicsType General '
+                'com.apple.print.preset.quality mid '
+                'com.apple.print.preset.output-mode color"')
 
 _lock = threading.Lock()
 STATE = {
@@ -203,16 +211,32 @@ def _driver_uri(hints=MODEL_HINTS):
 def ensure_ppd(queue):
     path = _ppd_path(queue)
     if os.path.exists(path) and os.path.getsize(path) > 1000:
-        return path
+        with open(path, "r", encoding="utf-8") as handle:
+            current = handle.read()
+        if MONO_PRESET in current and COLOR_PRESET in current:
+            return path
     uri = _driver_uri()
     if not uri:
         return None
     code, out = _run([DRIVER, "cat", uri])
     if code != 0 or len(out) < 500:
         return None
+    if "*Ink MONO/" not in out or "*Ink COLOR/" not in out:
+        return None
+    marker = "*CloseUI: *Ink\n"
+    if out.count(marker) != 1:
+        return None
+    out = out.replace(marker, marker + MONO_PRESET + "\n" + COLOR_PRESET + "\n", 1)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(out)
     return path
+
+def _queue_has_mono_preset(queue):
+    try:
+        with open(f"/etc/cups/ppd/{queue}.ppd", "r", encoding="utf-8") as handle:
+            return MONO_PRESET in handle.read()
+    except OSError:
+        return False
 
 
 def _queue_exists(queue):
@@ -289,6 +313,11 @@ def sync(printer_ip, queue=DEFAULT_QUEUE, info=None, location=None):
             current = _queue_device(queue)
             if current and current != uri:
                 _run(["lpadmin", "-p", queue, "-v", uri])
+            if not _queue_has_mono_preset(queue):
+                code, out = _run(["lpadmin", "-p", queue, "-P", ppd])
+                if code != 0:
+                    STATE.update(enabled=False, error=f"PPD update failed: {out.strip()[:300]}")
+                    return dict(STATE)
         else:
             code, out = _run(["lpadmin", "-p", queue, "-E", "-v", uri, "-P", ppd])
             if code != 0:
