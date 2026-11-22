@@ -49,6 +49,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             EpsonPrinterStatusSensor(coordinator, entry),
+            EpsonMaintenanceJobSensor(coordinator, entry),
             EpsonPagesTotalSensor(coordinator, entry),
             EpsonLastPrintSensor(coordinator, entry),
             EpsonLastCleanSensor(coordinator, entry),
@@ -110,6 +111,26 @@ class EpsonPrinterStatusSensor(EpsonBaseSensor):
             ATTR_SERVER_TIME: snapshot.get("server_time"),
             ATTR_LAST_POLL: snapshot.get("last_poll"),
         }
+
+class EpsonMaintenanceJobSensor(EpsonBaseSensor):
+    """Last maintenance command submitted; not a completion/progress signal."""
+
+    _attr_name = "Maintenance command"
+    _attr_icon = "mdi:printer-alert"
+
+    def __init__(self, coordinator: EpsonPrinterCoordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_maintenance_command"
+
+    @property
+    def native_value(self) -> str | None:
+        job = self._snapshot.get("last_job")
+        return job.get("event") if job else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        job = self._snapshot.get("last_job") or {}
+        return {"submitted_at": job.get("at"), "submission_only": True}
 
 
 class EpsonPagesTotalSensor(EpsonBaseSensor):

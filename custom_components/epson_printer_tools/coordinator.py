@@ -141,6 +141,13 @@ def state_snapshot(data: dict[str, Any] | None) -> dict[str, Any]:
     usage = data.get("usage") or {}
     settings = data.get("settings") or {}
     airprint = data.get("airprint") or {}
+    history = data.get("history") or []
+    last_job = next(
+        (item for item in history if isinstance(item, dict)
+         and item.get("event") in (ACTION_NOZZLE_CHECK, ACTION_HEAD_CLEAN)
+         and item.get("source") == "job"),
+        None,
+    ) if isinstance(history, list) else None
 
     return {
         "configured": printer.get("configured"),
@@ -156,6 +163,7 @@ def state_snapshot(data: dict[str, Any] | None) -> dict[str, Any]:
         "last_print": usage.get("last_print"),
         "last_clean": usage.get("last_clean"),
         "last_nozzle_check": usage.get("last_nozzle_check"),
+        "last_job": last_job,
         "last_poll": usage.get("last_poll"),
         "airprint_enabled": airprint.get("enabled"),
         "airprint_queue": airprint.get("queue"),

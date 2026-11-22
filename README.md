@@ -31,8 +31,10 @@ that field at runtime and keeps the rest of the payload byte-identical to the ca
 - **AirPrint bridge** — the add-on holds a print queue for the printer (ESC/P-R driver,
   relaying to the printer's raw port 9100) and advertises it over mDNS/DNS-SD, so iOS and
   macOS list it in the print dialog without any app.
-- **Native Home Assistant integration** — local API polling exposes status, pages, timestamps,
-  AirPrint availability and two action buttons. MQTT is optional for legacy installations.
+- **Native Home Assistant integration** — local API polling exposes printer status, last
+  submitted maintenance command, pages, timestamps, AirPrint availability and two action
+  buttons. The printer can report idle while a maintenance job runs; submission is not proof
+  of completion. MQTT is optional for legacy installations.
 
 ## Installation
 

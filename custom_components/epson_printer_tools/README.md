@@ -30,12 +30,16 @@ MQTT discovery entities without touching them.
 | Entity | Type | Source |
 |---|---|---|
 | Status | sensor | `printer.state` (IPP 3 idle / 4 processing / 5 stopped), `unreachable` when the printer is not reachable |
+| Maintenance command | sensor | Latest `nozzle_check` or `head_clean` submitted by the add-on, with `submitted_at` attribute; not a progress/completion signal |
 | Pages printed | sensor | `usage.pages_total`, `total_increasing`, unit `pages` |
 | Last print | sensor (timestamp) | `usage.last_print` |
 | Last clean | sensor (timestamp) | `usage.last_clean` |
 | AirPrint | binary sensor (connectivity) | `airprint.enabled` and a queue being present |
 | Nozzle check | button | `POST /api/action {"action":"nozzle_check"}` |
 | Head clean | button | `POST /api/action {"action":"head_clean"}` |
+
+The printer may report `idle` throughout a maintenance job. `Status` deliberately preserves its
+reported state; the maintenance command sensor proves submission only, not printing or completion.
 
 Status sensor attributes: `raw_state`, `reasons`, `reachable`, `model`, `serial`,
 `server_time`, `last_poll`. AirPrint attributes: `queue`, `ipp_uri`, `error`.

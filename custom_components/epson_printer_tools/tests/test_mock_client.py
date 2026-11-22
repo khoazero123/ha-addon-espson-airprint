@@ -191,6 +191,13 @@ async def main() -> None:
         check(snap["airprint_enabled"] is True, "airprint enabled mapped")
         check(snap["airprint_queue"] == "Epson_L8050", "airprint queue mapped")
         check(snap["model"] == "EPSON L8050 Series", "model mapped")
+        check(snap["last_job"] is None, "no job without history")
+        with_job = dict(data, history=[{"event": "print", "source": "counter"},
+                                       {"event": "head_clean", "source": "job", "at": "2026-11-22T08:20:00+07:00"}])
+        check(coordinator_mod.state_snapshot(with_job)["last_job"]["event"] == "head_clean",
+              "last submitted maintenance command mapped")
+        check(coordinator_mod.state_snapshot(dict(data, history="bad"))["last_job"] is None,
+              "invalid history ignored")
 
         await coord.async_run_action("nozzle_check")
         check(
